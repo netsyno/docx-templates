@@ -186,7 +186,7 @@ async function createReport(
   // - Build output XML and write it to disk
   // - Images
   logger.debug('Generating report...');
-  const ctx = newContext(createOptions, highest_img_id);
+  let ctx = newContext(createOptions, highest_img_id);
   const result = await produceJsReport(queryResult, prepped_template, ctx);
   if (result.status === 'errors') {
     throw result.errors;
@@ -211,10 +211,10 @@ async function createReport(
   await processLinks(links1, mainDocument, zip, TEMPLATE_PATH);
   await processHtmls(htmls1, mainDocument, zip, TEMPLATE_PATH);
 
-  let images = images1;
-  let links = links1;
-  let htmls = htmls1;
   for (const [js, filePath] of prepped_secondaries) {
+    // Grab the last used (highest) image id from the main document's context, but create
+    // a fresh one for each secondary XML.
+    ctx = newContext(createOptions, ctx.imageId);
     const result = await produceJsReport(queryResult, js, ctx);
     if (result.status === 'errors') {
       throw result.errors;
@@ -225,9 +225,6 @@ async function createReport(
       links: links2,
       htmls: htmls2,
     } = result;
-    images = merge(images, images2) as Images;
-    links = merge(links, links2) as Links;
-    htmls = merge(htmls, htmls2) as Htmls;
     const xml = buildXml(report2, xmlOptions);
     zipSetText(zip, filePath, xml);
 
@@ -437,9 +434,6 @@ export function getMainDoc(contentTypes: NonTextNode): string {
   );
 }
 
-// ==========================================
-// Process images
-// ==========================================
 const processImages = async (
   images: Images,
   documentComponent: string,
@@ -479,9 +473,6 @@ const processImages = async (
   }
 };
 
-// ==========================================
-// Process links
-// ==========================================
 const processLinks = async (
   links: Links,
   documentComponent: string,
@@ -560,9 +551,6 @@ const getRelsFromZip = async (zip: JSZip, relsPath: string) => {
   return parseXml(relsXml);
 };
 
-// ==========================================
-// Miscellaneous
-// ==========================================
 const getCmdDelimiter = (
   delimiter?: string | [string, string]
 ): [string, string] => {

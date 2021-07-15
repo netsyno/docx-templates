@@ -3,8 +3,9 @@
 import path from 'path';
 import fs from 'fs';
 import { createReport } from '../index';
-import { Image } from '../types';
+import { Image, ImagePars } from '../types';
 import { setDebugLogSink } from '../debug';
+import JSZip from 'jszip';
 
 if (process.env.DEBUG) setDebugLogSink(console.log);
 
@@ -174,7 +175,7 @@ it('004: can inject an image in the document header (regression test for #113)',
   // as these exit before the headers are parsed.
   // TODO: build a snapshot test once _probe === 'XML' properly includes all document XMLs, not just
   // the main document
-  return expect(createReport(opts)).resolves.toBeInstanceOf(Uint8Array);
+  expect(await createReport(opts)).toBeInstanceOf(Uint8Array);
 });
 
 it('005: can inject PNG files using ArrayBuffers without errors (related to issue #166)', async () => {
@@ -262,6 +263,29 @@ it('006: can inject an image from the data instead of the additionalJsContext', 
   expect(reportA).toBeInstanceOf(Uint8Array);
   expect(reportB).toBeInstanceOf(Uint8Array);
   expect(reportA).toStrictEqual(reportB);
+
+  // Ensure only one 'media' element (the image data as a png file) is added to the final docx file.
+  // Regression test for #218
+  const zip = await JSZip.loadAsync(reportA);
+  expect(Object.keys(zip?.files ?? {})).toMatchInlineSnapshot(`
+    Array [
+      "[Content_Types].xml",
+      "_rels/.rels",
+      "word/_rels/document.xml.rels",
+      "word/document.xml",
+      "word/theme/theme1.xml",
+      "word/settings.xml",
+      "word/fontTable.xml",
+      "word/webSettings.xml",
+      "docProps/app.xml",
+      "docProps/core.xml",
+      "word/styles.xml",
+      "word/",
+      "word/media/",
+      "word/media/template_document.xml_image1.png",
+      "word/_rels/",
+    ]
+  `);
 });
 
 it('007: can inject an image in a document that already contains images (regression test for #144)', async () => {
@@ -329,4 +353,40 @@ it('008: can inject an image in a shape in the doc footer (regression test for #
     'XML'
   );
   expect(report).toMatchSnapshot();
+});
+
+it('009 correctly rotate image', async () => {
+  const template = await fs.promises.readFile(
+    path.join(__dirname, 'fixtures', 'imageRotation.docx')
+  );
+  const buff = await fs.promises.readFile(
+    path.join(__dirname, 'fixtures', 'sample.png')
+  );
+  const opts = {
+    template,
+    data: {},
+    additionalJsContext: {
+      getImage: (): ImagePars => ({
+        width: 6,
+        height: 6,
+        data: buff,
+        extension: '.png',
+      }),
+      getImage45: (): ImagePars => ({
+        width: 6,
+        height: 6,
+        data: buff,
+        extension: '.png',
+        rotation: 45,
+      }),
+      getImage180: (): ImagePars => ({
+        width: 6,
+        height: 6,
+        data: buff,
+        extension: '.png',
+        rotation: 180,
+      }),
+    },
+  };
+  expect(await createReport(opts, 'XML')).toMatchSnapshot();
 });
