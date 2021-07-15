@@ -200,6 +200,10 @@ export declare type ImagePars = {
      * Optional alt text.
      */
     alt?: string;
+    /**
+     * Optional rotation in degrees, with positive angles moving clockwise.
+     */
+    rotation?: number;
 };
 export declare type LinkPars = {
     url: string;
